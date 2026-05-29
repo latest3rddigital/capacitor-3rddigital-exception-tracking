@@ -72,7 +72,7 @@ const getDevicePayload = async () => {
     },
     deviceInfo: {
       ...infoRecord,
-      model: nativeDeviceName || nativeDeviceModel,
+      model: nativeDeviceName,
       modelId: nativeDeviceModel,
       capacitorModel: nativeDeviceModel,
       rawDeviceInfo: infoRecord,

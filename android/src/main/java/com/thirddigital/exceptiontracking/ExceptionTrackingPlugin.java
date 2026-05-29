@@ -266,9 +266,11 @@ public class ExceptionTrackingPlugin {
         if (deviceInfo == null) {
             deviceInfo = new JSONObject();
         }
+        String deviceName = getAndroidDeviceName();
         put(deviceInfo, "brand", Build.BRAND);
         put(deviceInfo, "manufacturer", Build.MANUFACTURER);
-        put(deviceInfo, "model", Build.MODEL);
+        put(deviceInfo, "name", deviceName);
+        put(deviceInfo, "model", deviceName);
         put(deviceInfo, "device", Build.DEVICE);
         put(deviceInfo, "product", Build.PRODUCT);
         put(deviceInfo, "board", Build.BOARD);
@@ -404,6 +406,16 @@ public class ExceptionTrackingPlugin {
         }
 
         return Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+    }
+
+    private static String getAndroidDeviceName() {
+        Context context = appContext;
+        String deviceName = "";
+        if (context != null) {
+            deviceName = Settings.Global.getString(context.getContentResolver(), "device_name");
+        }
+
+        return firstString(deviceName, Build.DEVICE, Build.MODEL);
     }
 
     private static boolean isProbablyEmulator() {

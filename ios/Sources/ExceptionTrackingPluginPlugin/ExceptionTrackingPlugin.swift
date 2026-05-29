@@ -261,8 +261,8 @@ private func reportException(_ exception: NSException) {
         var deviceInfo = payload["deviceInfo"] as? [String: Any] ?? [:]
         deviceInfo["brand"] = "Apple"
         deviceInfo["manufacturer"] = "Apple"
-        deviceInfo["model"] = currentDeviceModel()
         deviceInfo["name"] = currentDeviceName()
+        deviceInfo["model"] = currentDeviceName()
         deviceInfo["systemName"] = currentSystemName()
         deviceInfo["systemVersion"] = currentOSVersion()
         deviceInfo["modelId"] = currentDeviceModel()

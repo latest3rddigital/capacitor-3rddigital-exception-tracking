@@ -7,17 +7,42 @@ import Capacitor
  */
 @objc(ExceptionTrackingPluginPlugin)
 public class ExceptionTrackingPluginPlugin: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "ExceptionTrackingPluginPlugin"
-    public let jsName = "ExceptionTrackingPlugin"
+    public let identifier = "NativeExceptionHandler"
+    public let jsName = "NativeExceptionHandler"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "echo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "releaseExceptionHold", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "uploadPendingException", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "crashForTesting", returnType: CAPPluginReturnPromise)
     ]
-    private let implementation = ExceptionTrackingPlugin()
+    private let implementation = ExceptionTrackingPlugin.shared
 
-    @objc func echo(_ call: CAPPluginCall) {
-        let value = call.getString("value") ?? ""
+    public override func load() {
+        implementation.attach(plugin: self)
+    }
+
+    @objc func configure(_ call: CAPPluginCall) {
+        implementation.configure(call)
+        call.resolve()
+    }
+
+    @objc func releaseExceptionHold(_ call: CAPPluginCall) {
+        implementation.releaseExceptionHold(handled: call.getBool("handled") ?? true)
+        call.resolve()
+    }
+
+    @objc func uploadPendingException(_ call: CAPPluginCall) {
         call.resolve([
-            "value": implementation.echo(value)
+            "uploaded": implementation.uploadPendingException()
         ])
+    }
+
+    @objc func crashForTesting(_ call: CAPPluginCall) {
+        implementation.crashForTesting(message: call.getString("message") ?? "Test native exception from Capacitor")
+        call.resolve()
+    }
+
+    func emitNativeException(_ event: [String: Any]) {
+        notifyListeners("nativeException", data: event, retainUntilConsumed: true)
     }
 }

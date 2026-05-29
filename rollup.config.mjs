@@ -7,6 +7,7 @@ export default {
       name: 'capacitorExceptionTrackingPlugin',
       globals: {
         '@capacitor/core': 'capacitorExports',
+        '@capacitor/device': 'capacitorDevice',
       },
       sourcemap: true,
       inlineDynamicImports: true,
@@ -18,5 +19,5 @@ export default {
       inlineDynamicImports: true,
     },
   ],
-  external: ['@capacitor/core'],
+  external: ['@capacitor/core', '@capacitor/device'],
 };

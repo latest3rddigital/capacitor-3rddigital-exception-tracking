@@ -1,10 +1,21 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { ExceptionTrackingPluginPlugin } from './definitions';
+import type { ConfigureNativeExceptionHandlerOptions, ExceptionTrackingPluginPlugin } from './definitions';
 
 export class ExceptionTrackingPluginWeb extends WebPlugin implements ExceptionTrackingPluginPlugin {
-  async echo(options: { value: string }): Promise<{ value: string }> {
-    console.log('ECHO', options);
-    return options;
+  async configure(_options: ConfigureNativeExceptionHandlerOptions): Promise<void> {
+    return undefined;
+  }
+
+  async releaseExceptionHold(): Promise<void> {
+    return undefined;
+  }
+
+  async uploadPendingException(): Promise<{ uploaded: boolean }> {
+    return { uploaded: false };
+  }
+
+  async crashForTesting(): Promise<void> {
+    throw new Error('Native crash testing is only available on Android and iOS.');
   }
 }

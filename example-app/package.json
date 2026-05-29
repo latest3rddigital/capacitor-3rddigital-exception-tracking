@@ -1,7 +1,7 @@
 {
   "name": "capacitor-app",
   "version": "1.0.0",
-  "description": "An Amazing Capacitor App",
+  "description": "Example app for 3rdDigital native exception tracking",
   "type": "module",
   "keywords": [
     "capacitor",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@capacitor/core": "latest",
+    "@capacitor/device": "^8.0.0",
     "capacitor-3rddigital-exception-tracking": "file:..",
     "@capacitor/ios": "^8.0.0",
     "@capacitor/android": "^8.0.0"

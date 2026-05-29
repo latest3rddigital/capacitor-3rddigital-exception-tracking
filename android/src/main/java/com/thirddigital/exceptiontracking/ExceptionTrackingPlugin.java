@@ -10,6 +10,7 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import com.getcapacitor.JSObject;
+import java.io.File;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
@@ -215,27 +216,49 @@ public class ExceptionTrackingPlugin {
             metadata = new JSONObject();
         }
 
+        String timestamp = getIsoTimestamp();
+        String deviceId = getAndroidDeviceId();
+        JSONObject appInfo = mergeAppInfo(payload.optJSONObject("appInfo"));
+        JSONObject memoryInfo = getMemoryInfo();
+        JSONObject storageInfo = getStorageInfo();
+
         put(metadata, "isNativeFallbackCandidate", true);
         put(metadata, "framework", "capacitor");
+        put(metadata, "backendSource", "capacitor");
+        put(metadata, "runtimeSource", "capacitor");
+        put(metadata, "errorSource", "native");
+        put(metadata, "nativePlatform", "android");
         put(metadata, "projectKey", projectKey);
+        put(metadata, "appInfo", appInfo);
+        put(metadata, "memoryInfo", memoryInfo);
+        put(metadata, "storageInfo", storageInfo);
 
-        put(payload, "source", "native");
+        put(payload, "source", "capacitor");
         put(payload, "stackSource", "native");
         put(payload, "platform", "android");
         put(payload, "projectKey", projectKey);
         put(payload, "title", throwable.getClass().getName());
         put(payload, "message", throwable.getMessage() != null ? throwable.getMessage() : throwable.toString());
         put(payload, "stackTrace", Log.getStackTraceString(throwable));
-        put(payload, "timestamp", getIsoTimestamp());
+        put(payload, "timestamp", timestamp);
+        put(payload, "reportedAt", timestamp);
+        put(payload, "deviceId", deviceId);
+        put(payload, "browserInfo", new JSONObject());
         put(payload, "metadata", metadata);
-        put(payload, "appInfo", mergeAppInfo(payload.optJSONObject("appInfo")));
+        put(payload, "appInfo", appInfo);
+        put(payload, "appVersion", firstString(appInfo.optString("versionName", null), payload.optString("appVersion", null)));
+        put(payload, "buildNumber", firstString(appInfo.optString("versionCode", null), payload.optString("buildNumber", null)));
 
         JSONObject osInfo = payload.optJSONObject("osInfo");
         if (osInfo == null) {
             osInfo = new JSONObject();
         }
+        put(osInfo, "name", "Android " + Build.VERSION.RELEASE);
         put(osInfo, "osName", "android");
         put(osInfo, "osVersion", Build.VERSION.RELEASE);
+        put(osInfo, "systemName", "Android " + Build.VERSION.RELEASE);
+        put(osInfo, "systemVersion", Build.VERSION.RELEASE);
+        put(osInfo, "platform", "android");
         put(osInfo, "apiLevel", Build.VERSION.SDK_INT);
         put(payload, "osInfo", osInfo);
 
@@ -252,12 +275,22 @@ public class ExceptionTrackingPlugin {
         put(deviceInfo, "hardware", Build.HARDWARE);
         put(deviceInfo, "fingerprint", Build.FINGERPRINT);
         put(deviceInfo, "supportedAbis", Arrays.asList(Build.SUPPORTED_ABIS));
-        put(deviceInfo, "deviceId", getAndroidDeviceId());
+        put(deviceInfo, "modelId", Build.MODEL);
+        put(deviceInfo, "capacitorModel", Build.MODEL);
+        put(deviceInfo, "deviceId", deviceId);
+        put(deviceInfo, "uniqueId", deviceId);
+        put(deviceInfo, "installationId", deviceId);
+        put(deviceInfo, "systemName", "Android " + Build.VERSION.RELEASE);
+        put(deviceInfo, "systemVersion", Build.VERSION.RELEASE);
         put(deviceInfo, "isVirtual", isProbablyEmulator());
-        put(deviceInfo, "memoryInfo", getMemoryInfo());
+        put(deviceInfo, "isEmulator", isProbablyEmulator());
+        put(deviceInfo, "memoryInfo", memoryInfo);
         put(payload, "deviceInfo", deviceInfo);
         put(payload, "screenInfo", mergeScreenInfo(payload.optJSONObject("screenInfo")));
         put(payload, "localeInfo", mergeLocaleInfo(payload.optJSONObject("localeInfo")));
+        put(payload, "memoryInfo", memoryInfo);
+        put(payload, "storageInfo", storageInfo);
+        put(payload, "otherDetails", mergeOtherDetails(payload.optJSONObject("otherDetails"), appInfo, memoryInfo, storageInfo, deviceInfo));
 
         return payload;
     }
@@ -331,6 +364,37 @@ public class ExceptionTrackingPlugin {
         put(memoryInfo, "lowMemory", systemMemoryInfo.lowMemory);
         put(memoryInfo, "threshold", systemMemoryInfo.threshold);
         return memoryInfo;
+    }
+
+    private static JSONObject getStorageInfo() {
+        JSONObject storageInfo = new JSONObject();
+        Context context = appContext;
+        if (context == null) {
+            return storageInfo;
+        }
+
+        File filesDir = context.getFilesDir();
+        put(storageInfo, "freeDiskStorage", filesDir.getFreeSpace());
+        put(storageInfo, "totalDiskCapacity", filesDir.getTotalSpace());
+        put(storageInfo, "usableDiskStorage", filesDir.getUsableSpace());
+        return storageInfo;
+    }
+
+    private static JSONObject mergeOtherDetails(
+        JSONObject otherDetails,
+        JSONObject appInfo,
+        JSONObject memoryInfo,
+        JSONObject storageInfo,
+        JSONObject deviceInfo
+    ) {
+        JSONObject mergedOtherDetails = otherDetails == null ? new JSONObject() : otherDetails;
+        put(mergedOtherDetails, "appInfo", appInfo);
+        put(mergedOtherDetails, "memoryInfo", memoryInfo);
+        put(mergedOtherDetails, "storageInfo", storageInfo);
+        put(mergedOtherDetails, "capacitorDeviceInfo", deviceInfo);
+        put(mergedOtherDetails, "nativeException", true);
+        put(mergedOtherDetails, "nativePlatform", "android");
+        return mergedOtherDetails;
     }
 
     private static String getAndroidDeviceId() {
@@ -499,6 +563,15 @@ public class ExceptionTrackingPlugin {
         try {
             object.put(key, value == null ? JSONObject.NULL : value);
         } catch (JSONException ignored) {}
+    }
+
+    private static String firstString(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty() && !"null".equals(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private static String getIsoTimestamp() {

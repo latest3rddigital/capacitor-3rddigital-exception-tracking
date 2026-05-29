@@ -6,6 +6,7 @@ export default {
       format: 'iife',
       name: 'capacitorExceptionTrackingPlugin',
       globals: {
+        '@capacitor/app': 'capacitorApp',
         '@capacitor/core': 'capacitorExports',
         '@capacitor/device': 'capacitorDevice',
       },
@@ -19,5 +20,5 @@ export default {
       inlineDynamicImports: true,
     },
   ],
-  external: ['@capacitor/core', '@capacitor/device'],
+  external: ['@capacitor/app', '@capacitor/core', '@capacitor/device'],
 };

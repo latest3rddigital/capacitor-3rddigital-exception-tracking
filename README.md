@@ -8,6 +8,7 @@ To use npm
 
 ```bash
 npm install capacitor-3rddigital-exception-tracking
+npm install @capacitor/app
 npm install @capacitor/device
 ```
 
@@ -15,6 +16,7 @@ To use yarn
 
 ```bash
 yarn add capacitor-3rddigital-exception-tracking
+yarn add @capacitor/app
 yarn add @capacitor/device
 ```
 
@@ -109,9 +111,9 @@ When `uploadedByNative` is `true`, the native fallback already posted the payloa
 
 ## Device Details
 
-The package automatically enriches native crash payloads with app, OS, device, battery, locale, and screen details. The JS `configure()` wrapper uses `@capacitor/device`, while the Android and iOS implementations also add native-only fields such as package/bundle version, Android ID or iOS vendor identifier, memory, ABI, and screen metrics.
+The package automatically enriches native crash payloads with app, OS, device, battery, locale, memory, storage, and screen details. The JS `configure()` wrapper uses `@capacitor/app` and `@capacitor/device`, while the Android and iOS implementations also add native-only fields such as package/bundle version, Android ID or iOS vendor identifier, memory, ABI, and screen metrics.
 
-Any values passed in `basePayload` are preserved and can override the automatically collected fields.
+Reports always send backend-counted fields in the expected shape: `source` is `capacitor`, native-origin details are sent in `stackSource`, `metadata.errorSource`, and `otherDetails`, `deviceId` is top-level, and Capacitor native reports send `browserInfo` as an empty object. Values passed in `basePayload` are preserved for extra context, but these backend-counted fields are normalized by the package so dashboards and device counts stay correct.
 
 ## Example App
 

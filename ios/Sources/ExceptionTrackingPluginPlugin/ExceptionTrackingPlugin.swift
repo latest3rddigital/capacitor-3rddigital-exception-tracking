@@ -215,26 +215,47 @@ private func reportException(_ exception: NSException) {
     private func buildPayload(exception: NSException) -> [String: Any] {
         var payload = basePayload
         var metadata = payload["metadata"] as? [String: Any] ?? [:]
+        let timestamp = isoTimestamp()
+        let deviceId = currentDeviceIdentifier()
+        let appInfo = mergeAppInfo(payload["appInfo"] as? [String: Any] ?? [:])
+        let screenInfo = mergeScreenInfo(payload["screenInfo"] as? [String: Any] ?? [:])
+        let localeInfo = mergeLocaleInfo(payload["localeInfo"] as? [String: Any] ?? [:])
+        let batteryInfo = mergeBatteryInfo(payload["batteryInfo"] as? [String: Any] ?? [:])
+
         metadata["isNativeFallbackCandidate"] = true
         metadata["framework"] = "capacitor"
+        metadata["backendSource"] = "capacitor"
+        metadata["runtimeSource"] = "capacitor"
+        metadata["errorSource"] = "native"
+        metadata["nativePlatform"] = currentOSName()
         metadata["exceptionName"] = exception.name.rawValue
         metadata["projectKey"] = projectKey
+        metadata["appInfo"] = appInfo
+        metadata["batteryInfo"] = batteryInfo
 
-        payload["source"] = "native"
+        payload["source"] = "capacitor"
         payload["stackSource"] = "native"
         payload["platform"] = "ios"
         payload["projectKey"] = projectKey ?? ""
         payload["title"] = exception.name.rawValue
         payload["message"] = exception.reason ?? exception.name.rawValue
         payload["stackTrace"] = stackTraceString(exception)
-        payload["timestamp"] = isoTimestamp()
+        payload["timestamp"] = timestamp
+        payload["reportedAt"] = timestamp
+        payload["deviceId"] = deviceId
+        payload["browserInfo"] = [:]
         payload["metadata"] = metadata
-        payload["appInfo"] = mergeAppInfo(payload["appInfo"] as? [String: Any] ?? [:])
+        payload["appInfo"] = appInfo
+        payload["appVersion"] = firstString(appInfo["versionName"], payload["appVersion"])
+        payload["buildNumber"] = firstString(appInfo["buildNumber"], payload["buildNumber"])
 
         var osInfo = payload["osInfo"] as? [String: Any] ?? [:]
+        osInfo["name"] = "\(currentSystemName()) \(currentOSVersion())"
         osInfo["osName"] = currentOSName()
         osInfo["osVersion"] = currentOSVersion()
-        osInfo["platform"] = currentSystemName()
+        osInfo["systemName"] = currentSystemName()
+        osInfo["systemVersion"] = currentOSVersion()
+        osInfo["platform"] = currentOSName()
         payload["osInfo"] = osInfo
 
         var deviceInfo = payload["deviceInfo"] as? [String: Any] ?? [:]
@@ -244,13 +265,26 @@ private func reportException(_ exception: NSException) {
         deviceInfo["name"] = currentDeviceName()
         deviceInfo["systemName"] = currentSystemName()
         deviceInfo["systemVersion"] = currentOSVersion()
-        deviceInfo["identifierForVendor"] = currentDeviceIdentifier()
+        deviceInfo["modelId"] = currentDeviceModel()
+        deviceInfo["capacitorModel"] = currentDeviceModel()
+        deviceInfo["deviceId"] = deviceId
+        deviceInfo["uniqueId"] = deviceId
+        deviceInfo["installationId"] = deviceId
+        deviceInfo["identifierForVendor"] = deviceId
         deviceInfo["localizedModel"] = currentLocalizedModel()
         deviceInfo["userInterfaceIdiom"] = currentUserInterfaceIdiom()
         payload["deviceInfo"] = deviceInfo
-        payload["screenInfo"] = mergeScreenInfo(payload["screenInfo"] as? [String: Any] ?? [:])
-        payload["localeInfo"] = mergeLocaleInfo(payload["localeInfo"] as? [String: Any] ?? [:])
-        payload["batteryInfo"] = mergeBatteryInfo(payload["batteryInfo"] as? [String: Any] ?? [:])
+        payload["screenInfo"] = screenInfo
+        payload["localeInfo"] = localeInfo
+        payload["batteryInfo"] = batteryInfo
+        payload["otherDetails"] = mergeOtherDetails(
+            payload["otherDetails"] as? [String: Any] ?? [:],
+            appInfo: appInfo,
+            batteryInfo: batteryInfo,
+            screenInfo: screenInfo,
+            localeInfo: localeInfo,
+            deviceInfo: deviceInfo
+        )
 
         return payload
     }
@@ -301,6 +335,25 @@ private func reportException(_ exception: NSException) {
         mergedBatteryInfo["batteryState"] = batteryStateName(UIDevice.current.batteryState)
         #endif
         return mergedBatteryInfo
+    }
+
+    private func mergeOtherDetails(
+        _ otherDetails: [String: Any],
+        appInfo: [String: Any],
+        batteryInfo: [String: Any],
+        screenInfo: [String: Any],
+        localeInfo: [String: Any],
+        deviceInfo: [String: Any]
+    ) -> [String: Any] {
+        var mergedOtherDetails = otherDetails
+        mergedOtherDetails["appInfo"] = appInfo
+        mergedOtherDetails["batteryInfo"] = batteryInfo
+        mergedOtherDetails["screenInfo"] = screenInfo
+        mergedOtherDetails["localeInfo"] = localeInfo
+        mergedOtherDetails["capacitorDeviceInfo"] = deviceInfo
+        mergedOtherDetails["nativeException"] = true
+        mergedOtherDetails["nativePlatform"] = currentOSName()
+        return mergedOtherDetails
     }
 
     private func stackTraceString(_ exception: NSException) -> String {
@@ -505,6 +558,18 @@ private func reportException(_ exception: NSException) {
         #else
         return "mac"
         #endif
+    }
+
+    private func firstString(_ values: Any?...) -> String {
+        for value in values {
+            if let value = value {
+                let text = "\(value)"
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
+                }
+            }
+        }
+        return ""
     }
 
     #if canImport(UIKit)

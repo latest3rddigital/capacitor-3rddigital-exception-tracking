@@ -46,6 +46,7 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
+    "@capacitor/app": "^8.0.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/device": "^8.0.0",
@@ -63,6 +64,7 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
+    "@capacitor/app": ">=8.0.0",
     "@capacitor/core": ">=8.0.0",
     "@capacitor/device": ">=8.0.0"
   },

@@ -6,6 +6,7 @@ const fields = {
   apiKey: document.querySelector('#apiKey'),
   projectKey: document.querySelector('#projectKey'),
   appVersion: document.querySelector('#appVersion'),
+  enabled: document.querySelector('#enabled'),
   nativeFallbackEnabled: document.querySelector('#nativeFallbackEnabled'),
   executeOriginalHandler: document.querySelector('#executeOriginalHandler'),
   forceToQuit: document.querySelector('#forceToQuit'),
@@ -29,6 +30,7 @@ const defaultConfig = {
   apiKey: import.meta.env.VITE_EXCEPTION_API_KEY || '',
   projectKey: import.meta.env.VITE_EXCEPTION_PROJECT_KEY || '',
   appVersion: import.meta.env.VITE_APP_VERSION || '1.0.0',
+  enabled: true,
   nativeFallbackEnabled: true,
   executeOriginalHandler: true,
   forceToQuit: false,
@@ -70,6 +72,7 @@ const fillForm = () => {
   fields.apiKey.value = config.apiKey;
   fields.projectKey.value = config.projectKey;
   fields.appVersion.value = config.appVersion;
+  fields.enabled.checked = config.enabled;
   fields.nativeFallbackEnabled.checked = config.nativeFallbackEnabled;
   fields.executeOriginalHandler.checked = config.executeOriginalHandler;
   fields.forceToQuit.checked = config.forceToQuit;
@@ -80,6 +83,7 @@ const readForm = () => ({
   apiKey: fields.apiKey.value.trim(),
   projectKey: fields.projectKey.value.trim(),
   appVersion: fields.appVersion.value.trim() || '1.0.0',
+  enabled: fields.enabled.checked,
   nativeFallbackEnabled: fields.nativeFallbackEnabled.checked,
   executeOriginalHandler: fields.executeOriginalHandler.checked,
   forceToQuit: fields.forceToQuit.checked,
@@ -93,6 +97,7 @@ const buildNativeOptions = () => {
     url: config.url,
     apiKey: config.apiKey,
     projectKey: config.projectKey,
+    enabled: config.enabled,
     nativeFallbackEnabled: config.nativeFallbackEnabled,
     executeOriginalHandler: config.executeOriginalHandler,
     forceToQuit: config.forceToQuit,
@@ -142,6 +147,7 @@ const configureHandler = async () => {
   appendLog('configured', {
     url: options.url,
     projectKey: options.projectKey,
+    enabled: options.enabled,
     nativeFallbackEnabled: options.nativeFallbackEnabled,
   });
   setStatus('Native exception tracking configured.');

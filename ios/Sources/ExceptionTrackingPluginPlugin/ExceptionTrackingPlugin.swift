@@ -14,9 +14,17 @@ private let maxExceptionCount: Int32 = 10
 private var uncaughtExceptionCount: Int32 = 0
 private var previousExceptionHandler: NSUncaughtExceptionHandler?
 private var installedSignalHandlers = false
+private var previousSignalHandlers: [Int32: (@convention(c) (Int32) -> Void)?] = [:]
+private var passthroughHandlerInstalled = false
 
 private let exceptionHandler: @convention(c) (NSException) -> Void = { exception in
     reportException(exception)
+}
+
+private let passthroughExceptionHandler: @convention(c) (NSException) -> Void = { exception in
+    if let previousExceptionHandler = previousExceptionHandler {
+        previousExceptionHandler(exception)
+    }
 }
 
 private let signalHandler: @convention(c) (Int32) -> Void = { signal in
@@ -32,6 +40,10 @@ private let signalHandler: @convention(c) (Int32) -> Void = { signal in
 }
 
 private func reportException(_ exception: NSException) {
+    if !ExceptionTrackingPlugin.shared.isEnabled {
+        return
+    }
+
     uncaughtExceptionCount += 1
     if uncaughtExceptionCount > maxExceptionCount {
         return
@@ -51,6 +63,7 @@ private func reportException(_ exception: NSException) {
     static let shared = ExceptionTrackingPlugin()
 
     private weak var plugin: ExceptionTrackingPluginPlugin?
+    private var enabled = true
     private var executeOriginalHandler = true
     private var forceToQuit = false
     private var nativeFallbackEnabled = true
@@ -64,10 +77,16 @@ private func reportException(_ exception: NSException) {
     private var lastReportedException: NSException?
     private var handlersInstalled = false
 
+    var isEnabled: Bool {
+        enabled
+    }
+
     func attach(plugin: ExceptionTrackingPluginPlugin) {
         self.plugin = plugin
         restoreConfiguration()
-        uploadPendingExceptionAsync()
+        if enabled {
+            uploadPendingExceptionAsync()
+        }
     }
 
     func configure(_ call: CAPPluginCall) {
@@ -77,6 +96,7 @@ private func reportException(_ exception: NSException) {
         projectKey = incomingProjectKey
         headers = call.getObject("headers") ?? headers
         basePayload = call.getObject("basePayload") ?? basePayload
+        enabled = call.getBool("enabled") ?? enabled
         nativeFallbackEnabled = call.getBool("nativeFallbackEnabled") ?? nativeFallbackEnabled
         executeOriginalHandler = call.getBool("executeOriginalHandler") ?? executeOriginalHandler
         forceToQuit = call.getBool("forceToQuit") ?? forceToQuit
@@ -85,6 +105,11 @@ private func reportException(_ exception: NSException) {
         }
 
         persistConfiguration()
+        if !enabled {
+            uninstallNativeExceptionHandler()
+            return
+        }
+
         installNativeExceptionHandler()
         uploadPendingExceptionAsync()
     }
@@ -97,7 +122,7 @@ private func reportException(_ exception: NSException) {
     }
 
     func uploadPendingException() -> Bool {
-        guard nativeFallbackEnabled else {
+        guard enabled, nativeFallbackEnabled else {
             return false
         }
         guard let json = UserDefaults.standard.string(forKey: pendingPayloadKey),
@@ -120,6 +145,10 @@ private func reportException(_ exception: NSException) {
     }
 
     func crashForTesting(message: String) {
+        guard enabled else {
+            return
+        }
+
         DispatchQueue.main.async {
             NSException(
                 name: NSExceptionName("CapacitorTestNativeException"),
@@ -130,6 +159,11 @@ private func reportException(_ exception: NSException) {
     }
 
     func handle(exception: NSException) {
+        guard enabled else {
+            continueCrash(exception)
+            return
+        }
+
         if lastReportedException === exception {
             return
         }
@@ -168,21 +202,51 @@ private func reportException(_ exception: NSException) {
             return
         }
 
-        previousExceptionHandler = NSGetUncaughtExceptionHandler()
+        if !passthroughHandlerInstalled {
+            previousExceptionHandler = NSGetUncaughtExceptionHandler()
+        }
         NSSetUncaughtExceptionHandler(exceptionHandler)
+        passthroughHandlerInstalled = false
 
         if !installedSignalHandlers {
             installedSignalHandlers = true
-            signal(SIGABRT, signalHandler)
-            signal(SIGILL, signalHandler)
-            signal(SIGSEGV, signalHandler)
-            signal(SIGFPE, signalHandler)
-            signal(SIGBUS, signalHandler)
-            signal(SIGPIPE, signalHandler)
-            signal(SIGTRAP, signalHandler)
+            installSignalHandler(SIGABRT)
+            installSignalHandler(SIGILL)
+            installSignalHandler(SIGSEGV)
+            installSignalHandler(SIGFPE)
+            installSignalHandler(SIGBUS)
+            installSignalHandler(SIGPIPE)
+            installSignalHandler(SIGTRAP)
         }
 
         handlersInstalled = true
+    }
+
+    private func installSignalHandler(_ signalNumber: Int32) {
+        previousSignalHandlers[signalNumber] = signal(signalNumber, signalHandler)
+    }
+
+    private func uninstallNativeExceptionHandler() {
+        guard handlersInstalled else {
+            return
+        }
+
+        NSSetUncaughtExceptionHandler(passthroughExceptionHandler)
+        passthroughHandlerInstalled = true
+
+        if installedSignalHandlers {
+            for signalNumber in [SIGABRT, SIGILL, SIGSEGV, SIGFPE, SIGBUS, SIGPIPE, SIGTRAP] {
+                if let previousHandler = previousSignalHandlers[signalNumber] ?? nil {
+                    signal(signalNumber, previousHandler)
+                } else {
+                    signal(signalNumber, SIG_DFL)
+                }
+            }
+            previousSignalHandlers.removeAll()
+            installedSignalHandlers = false
+        }
+
+        handlersInstalled = false
     }
 
     private func continueCrash(_ exception: NSException) {
@@ -415,6 +479,7 @@ private func reportException(_ exception: NSException) {
         defaults.set(projectKey, forKey: "\(prefsPrefix).projectKey")
         defaults.set(headers, forKey: "\(prefsPrefix).headers")
         defaults.set(basePayload, forKey: "\(prefsPrefix).basePayload")
+        defaults.set(enabled, forKey: "\(prefsPrefix).enabled")
         defaults.set(nativeFallbackEnabled, forKey: "\(prefsPrefix).nativeFallbackEnabled")
         defaults.set(executeOriginalHandler, forKey: "\(prefsPrefix).executeOriginalHandler")
         defaults.set(forceToQuit, forKey: "\(prefsPrefix).forceToQuit")
@@ -429,6 +494,9 @@ private func reportException(_ exception: NSException) {
         projectKey = defaults.string(forKey: "\(prefsPrefix).projectKey") ?? projectKey
         headers = defaults.dictionary(forKey: "\(prefsPrefix).headers") ?? headers
         basePayload = defaults.dictionary(forKey: "\(prefsPrefix).basePayload") ?? basePayload
+        if defaults.object(forKey: "\(prefsPrefix).enabled") != nil {
+            enabled = defaults.bool(forKey: "\(prefsPrefix).enabled")
+        }
         if defaults.object(forKey: "\(prefsPrefix).nativeFallbackEnabled") != nil {
             nativeFallbackEnabled = defaults.bool(forKey: "\(prefsPrefix).nativeFallbackEnabled")
         }

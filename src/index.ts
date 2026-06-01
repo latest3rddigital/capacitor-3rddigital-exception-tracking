@@ -123,6 +123,10 @@ const mergeRecord = (
 const withDevicePayload = async (
   options: ConfigureNativeExceptionHandlerOptions,
 ): Promise<ConfigureNativeExceptionHandlerOptions> => {
+  if (options.enabled === false) {
+    return options;
+  }
+
   const devicePayload = await getDevicePayload();
   const basePayload = options.basePayload ?? {};
 

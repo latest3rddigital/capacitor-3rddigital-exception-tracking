@@ -48,6 +48,7 @@ await NativeExceptionHandler.configure({
   url: 'https://your-api.example.com/api',
   apiKey: 'your-api-key',
   projectKey: 'your-project-key',
+  enabled: true,
   nativeFallbackEnabled: true,
   executeOriginalHandler: true,
   forceToQuit: false,
@@ -76,12 +77,15 @@ If `url` already ends with `/exceptions/ingest/{projectKey}`, that exact URL is 
 | `url`                    | Yes      | Base API URL or full ingest URL.                                                              |
 | `apiKey`                 | Yes      | Sent as the `Api-Key` header.                                                                 |
 | `projectKey`             | Yes      | Project identifier used in the ingest URL and payload.                                        |
+| `enabled`                | No       | Enables this plugin's native exception tracking. Set `false` to skip handler installation, event emission, pending retries, and native API calls. Defaults to `true`. |
 | `headers`                | No       | Extra request headers.                                                                        |
 | `basePayload`            | No       | Static payload fields merged into every native crash report.                                  |
 | `nativeFallbackEnabled`  | No       | Enables native-side upload before the app exits. Defaults to `true`.                          |
 | `executeOriginalHandler` | No       | Runs the previous native crash handler after reporting. Defaults to `true`.                   |
 | `forceToQuit`            | No       | Forces process termination after handling when no original handler runs. Defaults to `false`. |
 | `holdTimeoutMs`          | No       | Time to wait for the JS listener to call `releaseExceptionHold`. Defaults to `5000`.          |
+
+Use `enabled: false` for debug builds when you do not want this package to capture or upload native exceptions. The flag can also be set to `false` in release builds. It only disables this plugin's native handler and API calls; it does not disable or configure other crash libraries such as Firebase Crashlytics or Sentry.
 
 ### Methods
 

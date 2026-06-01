@@ -12,6 +12,7 @@ export interface ConfigureNativeExceptionHandlerOptions {
   url: string;
   apiKey: string;
   projectKey: string;
+  enabled?: boolean;
   headers?: Record<string, string>;
   basePayload?: ExceptionPayload;
   nativeFallbackEnabled?: boolean;

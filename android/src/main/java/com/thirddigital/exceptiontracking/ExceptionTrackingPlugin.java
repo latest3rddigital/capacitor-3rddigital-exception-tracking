@@ -38,6 +38,8 @@ public class ExceptionTrackingPlugin {
     private static WeakReference<ExceptionTrackingPluginPlugin> pluginReference = new WeakReference<>(null);
     private static Thread.UncaughtExceptionHandler originalHandler;
     private static boolean handlerInstalled = false;
+    private static Thread.UncaughtExceptionHandler installedHandler;
+    private static boolean enabled = true;
     private static boolean executeOriginalHandler = true;
     private static boolean forceToQuit = false;
     private static boolean nativeFallbackEnabled = true;
@@ -59,7 +61,9 @@ public class ExceptionTrackingPlugin {
         appContext = context.getApplicationContext();
         pluginReference = new WeakReference<>(plugin);
         restoreConfiguration(appContext);
-        uploadPendingExceptionAsync(appContext);
+        if (enabled) {
+            uploadPendingExceptionAsync(appContext);
+        }
     }
 
     public void configure(Context context, ExceptionTrackingPluginPlugin plugin, JSObject options) throws JSONException {
@@ -68,6 +72,7 @@ public class ExceptionTrackingPlugin {
         ingestUrl = getIngestUrl(options.getString("url"), options.getString("projectKey"));
         apiKey = options.getString("apiKey", apiKey);
         projectKey = options.getString("projectKey", projectKey);
+        enabled = options.has("enabled") ? options.getBoolean("enabled") : enabled;
         nativeFallbackEnabled = options.has("nativeFallbackEnabled") ? options.getBoolean("nativeFallbackEnabled") : nativeFallbackEnabled;
         executeOriginalHandler = options.has("executeOriginalHandler") ? options.getBoolean("executeOriginalHandler") : executeOriginalHandler;
         forceToQuit = options.has("forceToQuit") ? options.getBoolean("forceToQuit") : forceToQuit;
@@ -84,6 +89,11 @@ public class ExceptionTrackingPlugin {
         }
 
         persistConfiguration(appContext);
+        if (!enabled) {
+            uninstallNativeExceptionHandler();
+            return;
+        }
+
         installNativeExceptionHandler();
         uploadPendingExceptionAsync(appContext);
     }
@@ -100,7 +110,7 @@ public class ExceptionTrackingPlugin {
     }
 
     public boolean uploadPendingException(Context context) {
-        if (context == null || !nativeFallbackEnabled) {
+        if (context == null || !enabled || !nativeFallbackEnabled) {
             return false;
         }
 
@@ -125,6 +135,10 @@ public class ExceptionTrackingPlugin {
     }
 
     public void crashForTesting(String message) {
+        if (!enabled) {
+            return;
+        }
+
         new Thread(() -> {
             throw new RuntimeException(message);
         }, "CapacitorExceptionTestCrash").start();
@@ -142,13 +156,30 @@ public class ExceptionTrackingPlugin {
         originalHandler = Thread.getDefaultUncaughtExceptionHandler();
         handlerInstalled = true;
 
-        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+        installedHandler = (thread, throwable) -> {
             reportException(throwable);
             continueCrash(thread, throwable);
-        });
+        };
+        Thread.setDefaultUncaughtExceptionHandler(installedHandler);
+    }
+
+    private static void uninstallNativeExceptionHandler() {
+        if (!handlerInstalled) {
+            return;
+        }
+
+        if (Thread.getDefaultUncaughtExceptionHandler() == installedHandler) {
+            Thread.setDefaultUncaughtExceptionHandler(originalHandler);
+        }
+        handlerInstalled = false;
+        installedHandler = null;
     }
 
     private static void reportException(Throwable throwable) {
+        if (!enabled) {
+            return;
+        }
+
         int throwableId = System.identityHashCode(throwable);
         if (lastReportedThrowableId != null && lastReportedThrowableId == throwableId) {
             return;
@@ -502,6 +533,7 @@ public class ExceptionTrackingPlugin {
             .putString("projectKey", projectKey)
             .putString("headersJson", headersJson)
             .putString("basePayloadJson", basePayloadJson)
+            .putBoolean("enabled", enabled)
             .putBoolean("nativeFallbackEnabled", nativeFallbackEnabled)
             .putBoolean("executeOriginalHandler", executeOriginalHandler)
             .putBoolean("forceToQuit", forceToQuit)
@@ -519,6 +551,7 @@ public class ExceptionTrackingPlugin {
         projectKey = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("projectKey", projectKey);
         headersJson = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("headersJson", headersJson);
         basePayloadJson = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("basePayloadJson", basePayloadJson);
+        enabled = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean("enabled", enabled);
         nativeFallbackEnabled = context
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean("nativeFallbackEnabled", nativeFallbackEnabled);

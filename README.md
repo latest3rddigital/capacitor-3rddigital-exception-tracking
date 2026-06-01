@@ -117,7 +117,7 @@ When `uploadedByNative` is `true`, the native fallback already posted the payloa
 
 The package automatically enriches native crash payloads with app, OS, device, battery, locale, memory, storage, and screen details. The JS `configure()` wrapper uses `@capacitor/app` and `@capacitor/device`, while the Android and iOS implementations also add native-only fields such as package/bundle version, Android ID or iOS vendor identifier, memory, ABI, and screen metrics.
 
-Reports always send backend-counted fields in the expected shape: `source` is `capacitor`, native-origin details are sent in `stackSource`, `metadata.errorSource`, and `otherDetails`, `deviceId` is top-level, and Capacitor native reports send `browserInfo` as an empty object. Values passed in `basePayload` are preserved for extra context, but these backend-counted fields are normalized by the package so dashboards and device counts stay correct.
+Reports always send backend-counted fields in the expected shape: `source` is `capacitor`, native-origin details are sent in `stackSource`, `metadata.errorSource`, and `otherDetails`, `deviceId` is top-level, and Capacitor native reports send `browserInfo` as an empty object. Native crash payloads also include route context by preserving app-provided `screenName`, `pageUrl`, `url`, `path`, and `pathname` values; otherwise the package derives them from the current WebView URL and defaults `screenName` to `UnknownScreen` when no path is available. Values passed in `basePayload` are preserved for extra context, but these backend-counted fields are normalized by the package so dashboards and device counts stay correct.
 
 ## Example App
 

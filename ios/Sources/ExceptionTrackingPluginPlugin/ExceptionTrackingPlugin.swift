@@ -312,6 +312,7 @@ private func reportException(_ exception: NSException) {
         payload["appInfo"] = appInfo
         payload["appVersion"] = firstString(appInfo["versionName"], payload["appVersion"])
         payload["buildNumber"] = firstString(appInfo["buildNumber"], payload["buildNumber"])
+        ensureRouteContext(&payload)
 
         var osInfo = payload["osInfo"] as? [String: Any] ?? [:]
         osInfo["name"] = "\(currentSystemName()) \(currentOSVersion())"
@@ -351,6 +352,40 @@ private func reportException(_ exception: NSException) {
         )
 
         return payload
+    }
+
+    private func ensureRouteContext(_ payload: inout [String: Any]) {
+        let currentPageUrl = currentWebViewUrl()
+        let currentPathname = pathname(from: currentPageUrl)
+        let screenName = payload["screenName"] as? String
+        let pageUrl = payload["pageUrl"] as? String
+
+        if isBlank(pageUrl), !isBlank(currentPageUrl) {
+            payload["pageUrl"] = currentPageUrl
+        }
+        if isBlank(payload["url"] as? String), !isBlank(currentPageUrl) {
+            payload["url"] = currentPageUrl
+        }
+        if isBlank(payload["path"] as? String), !isBlank(currentPathname) {
+            payload["path"] = currentPathname
+        }
+        if isBlank(payload["pathname"] as? String), !isBlank(currentPathname) {
+            payload["pathname"] = currentPathname
+        }
+        if isBlank(screenName) {
+            payload["screenName"] = firstString(payload["pathname"], payload["path"], currentPathname, "UnknownScreen")
+        }
+    }
+
+    private func currentWebViewUrl() -> String {
+        plugin?.webView?.url?.absoluteString ?? ""
+    }
+
+    private func pathname(from pageUrl: String) -> String {
+        guard !isBlank(pageUrl), let url = URL(string: pageUrl) else {
+            return ""
+        }
+        return url.path
     }
 
     private func mergeAppInfo(_ appInfo: [String: Any]) -> [String: Any] {
@@ -626,6 +661,13 @@ private func reportException(_ exception: NSException) {
         #else
         return "mac"
         #endif
+    }
+
+    private func isBlank(_ value: String?) -> Bool {
+        guard let value = value else {
+            return true
+        }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func firstString(_ values: Any?...) -> String {

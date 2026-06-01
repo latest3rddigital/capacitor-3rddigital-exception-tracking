@@ -6,9 +6,11 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.webkit.WebView;
 import com.getcapacitor.JSObject;
 import java.io.File;
 import java.io.OutputStream;
@@ -23,6 +25,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -74,7 +77,9 @@ public class ExceptionTrackingPlugin {
         projectKey = options.getString("projectKey", projectKey);
         enabled = options.has("enabled") ? options.getBoolean("enabled") : enabled;
         nativeFallbackEnabled = options.has("nativeFallbackEnabled") ? options.getBoolean("nativeFallbackEnabled") : nativeFallbackEnabled;
-        executeOriginalHandler = options.has("executeOriginalHandler") ? options.getBoolean("executeOriginalHandler") : executeOriginalHandler;
+        executeOriginalHandler = options.has("executeOriginalHandler")
+            ? options.getBoolean("executeOriginalHandler")
+            : executeOriginalHandler;
         forceToQuit = options.has("forceToQuit") ? options.getBoolean("forceToQuit") : forceToQuit;
         holdTimeoutMs = options.has("holdTimeoutMs") ? options.getLong("holdTimeoutMs") : holdTimeoutMs;
 
@@ -279,6 +284,7 @@ public class ExceptionTrackingPlugin {
         put(payload, "appInfo", appInfo);
         put(payload, "appVersion", firstString(appInfo.optString("versionName", null), payload.optString("appVersion", null)));
         put(payload, "buildNumber", firstString(appInfo.optString("versionCode", null), payload.optString("buildNumber", null)));
+        ensureRouteContext(payload);
 
         JSONObject osInfo = payload.optJSONObject("osInfo");
         if (osInfo == null) {
@@ -323,9 +329,84 @@ public class ExceptionTrackingPlugin {
         put(payload, "localeInfo", mergeLocaleInfo(payload.optJSONObject("localeInfo")));
         put(payload, "memoryInfo", memoryInfo);
         put(payload, "storageInfo", storageInfo);
-        put(payload, "otherDetails", mergeOtherDetails(payload.optJSONObject("otherDetails"), appInfo, memoryInfo, storageInfo, deviceInfo));
+        put(
+            payload,
+            "otherDetails",
+            mergeOtherDetails(payload.optJSONObject("otherDetails"), appInfo, memoryInfo, storageInfo, deviceInfo)
+        );
 
         return payload;
+    }
+
+    private static void ensureRouteContext(JSONObject payload) {
+        String currentPageUrl = getCurrentPageUrl();
+        String currentPathname = getPathname(currentPageUrl);
+        String screenName = payload.optString("screenName", null);
+        String pageUrl = payload.optString("pageUrl", null);
+
+        if (isBlank(pageUrl) && !isBlank(currentPageUrl)) {
+            put(payload, "pageUrl", currentPageUrl);
+        }
+        if (isBlank(payload.optString("url", null)) && !isBlank(currentPageUrl)) {
+            put(payload, "url", currentPageUrl);
+        }
+        if (isBlank(payload.optString("path", null)) && !isBlank(currentPathname)) {
+            put(payload, "path", currentPathname);
+        }
+        if (isBlank(payload.optString("pathname", null)) && !isBlank(currentPathname)) {
+            put(payload, "pathname", currentPathname);
+        }
+        if (isBlank(screenName)) {
+            put(
+                payload,
+                "screenName",
+                firstString(payload.optString("pathname", null), payload.optString("path", null), currentPathname, "UnknownScreen")
+            );
+        }
+    }
+
+    private static String getCurrentPageUrl() {
+        try {
+            ExceptionTrackingPluginPlugin plugin = pluginReference.get();
+            if (plugin == null || plugin.getBridge() == null) {
+                return "";
+            }
+
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                return getWebViewUrl(plugin);
+            }
+            if (plugin.getActivity() == null) {
+                return "";
+            }
+
+            AtomicReference<String> pageUrl = new AtomicReference<>("");
+            CountDownLatch latch = new CountDownLatch(1);
+            plugin.getActivity().runOnUiThread(() -> {
+                pageUrl.set(getWebViewUrl(plugin));
+                latch.countDown();
+            });
+            latch.await(250, TimeUnit.MILLISECONDS);
+            return pageUrl.get();
+        } catch (Exception exception) {
+            return "";
+        }
+    }
+
+    private static String getWebViewUrl(ExceptionTrackingPluginPlugin plugin) {
+        WebView webView = plugin.getBridge().getWebView();
+        return webView == null ? "" : webView.getUrl();
+    }
+
+    private static String getPathname(String pageUrl) {
+        if (isBlank(pageUrl)) {
+            return "";
+        }
+
+        try {
+            return new URL(pageUrl).getPath();
+        } catch (Exception exception) {
+            return "";
+        }
     }
 
     private static JSONObject mergeAppInfo(JSONObject appInfo) {
@@ -612,11 +693,15 @@ public class ExceptionTrackingPlugin {
 
     private static String firstString(String... values) {
         for (String value : values) {
-            if (value != null && !value.trim().isEmpty() && !"null".equals(value)) {
+            if (!isBlank(value)) {
                 return value;
             }
         }
         return "";
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty() || "null".equals(value);
     }
 
     private static String getIsoTimestamp() {

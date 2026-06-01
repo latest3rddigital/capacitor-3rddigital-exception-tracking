@@ -1,5 +1,5 @@
-import { registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
+import { registerPlugin } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 
 import type { ConfigureNativeExceptionHandlerOptions, ExceptionTrackingPluginPlugin } from './definitions';
@@ -120,6 +120,42 @@ const mergeRecord = (
   ...(right ?? {}),
 });
 
+const isBrowser = () => typeof window !== 'undefined' && typeof window.location !== 'undefined';
+
+const isBlankString = (value: unknown): value is undefined | null | string =>
+  value == null || (typeof value === 'string' && value.trim().length === 0);
+
+const getCurrentRouteContext = (): Record<string, unknown> => {
+  if (!isBrowser()) {
+    return {};
+  }
+
+  const pageUrl = window.location.href;
+  const pathname = window.location.pathname;
+
+  return {
+    pageUrl,
+    url: pageUrl,
+    path: pathname,
+    pathname,
+    screenName: pathname || 'UnknownScreen',
+  };
+};
+
+const withRouteContext = (payload: Record<string, unknown>): Record<string, unknown> => {
+  const routeContext = getCurrentRouteContext();
+
+  return {
+    ...routeContext,
+    ...payload,
+    pageUrl: isBlankString(payload.pageUrl) ? routeContext.pageUrl : payload.pageUrl,
+    url: isBlankString(payload.url) ? routeContext.url : payload.url,
+    path: isBlankString(payload.path) ? routeContext.path : payload.path,
+    pathname: isBlankString(payload.pathname) ? routeContext.pathname : payload.pathname,
+    screenName: isBlankString(payload.screenName) ? (routeContext.screenName ?? 'UnknownScreen') : payload.screenName,
+  };
+};
+
 const withDevicePayload = async (
   options: ConfigureNativeExceptionHandlerOptions,
 ): Promise<ConfigureNativeExceptionHandlerOptions> => {
@@ -132,7 +168,7 @@ const withDevicePayload = async (
 
   return {
     ...options,
-    basePayload: {
+    basePayload: withRouteContext({
       ...basePayload,
       source: 'capacitor',
       deviceId: devicePayload.deviceId ?? basePayload.deviceId,
@@ -157,7 +193,7 @@ const withDevicePayload = async (
         toPayloadRecord(basePayload.metadata),
       ),
       otherDetails: mergeRecord(toPayloadRecord(devicePayload.otherDetails), toPayloadRecord(basePayload.otherDetails)),
-    },
+    }),
   };
 };
 

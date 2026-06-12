@@ -21,6 +21,15 @@ export interface ConfigureNativeExceptionHandlerOptions {
   holdTimeoutMs?: number;
 }
 
+export interface UpdateNativeExceptionContextOptions {
+  [key: string]: unknown;
+  headers?: Record<string, string>;
+  payload?: ExceptionPayload;
+  userInfo?: ExceptionPayload;
+  metadata?: ExceptionPayload;
+  otherDetails?: ExceptionPayload;
+}
+
 export interface ReleaseExceptionHoldOptions {
   handled?: boolean;
 }
@@ -31,6 +40,7 @@ export interface CrashForTestingOptions {
 
 export interface ExceptionTrackingPluginPlugin {
   configure(options: ConfigureNativeExceptionHandlerOptions): Promise<void>;
+  setContext(options: UpdateNativeExceptionContextOptions): Promise<void>;
   releaseExceptionHold(options?: ReleaseExceptionHoldOptions): Promise<void>;
   uploadPendingException(): Promise<{ uploaded: boolean }>;
   crashForTesting(options?: CrashForTestingOptions): Promise<void>;

@@ -2,7 +2,11 @@ import { App } from '@capacitor/app';
 import { registerPlugin } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 
-import type { ConfigureNativeExceptionHandlerOptions, ExceptionTrackingPluginPlugin } from './definitions';
+import type {
+  ConfigureNativeExceptionHandlerOptions,
+  ExceptionTrackingPluginPlugin,
+  UpdateNativeExceptionContextOptions,
+} from './definitions';
 
 const NativeExceptionHandlerNative = registerPlugin<ExceptionTrackingPluginPlugin>('NativeExceptionHandler', {
   web: () => import('./web').then((m) => new m.ExceptionTrackingPluginWeb()),
@@ -120,6 +124,21 @@ const mergeRecord = (
   ...(right ?? {}),
 });
 
+const mergePayload = (
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = { ...(left ?? {}) };
+
+  Object.entries(right ?? {}).forEach(([key, value]) => {
+    const existing = toPayloadRecord(merged[key]);
+    const incoming = toPayloadRecord(value);
+    merged[key] = existing && incoming ? mergePayload(existing, incoming) : value;
+  });
+
+  return merged;
+};
+
 const isBrowser = () => typeof window !== 'undefined' && typeof window.location !== 'undefined';
 
 const isBlankString = (value: unknown): value is undefined | null | string =>
@@ -197,8 +216,62 @@ const withDevicePayload = async (
   };
 };
 
+let runtimePayload: Record<string, unknown> = {};
+let runtimeHeaders: Record<string, string> = {};
+
+const normalizeContextOptions = (
+  options: UpdateNativeExceptionContextOptions,
+): { headers?: Record<string, string>; payload: Record<string, unknown> } => {
+  const directPayload: Record<string, unknown> = {};
+  Object.entries(options).forEach(([key, value]) => {
+    if (!['headers', 'payload', 'userInfo', 'metadata', 'otherDetails'].includes(key)) {
+      directPayload[key] = value;
+    }
+  });
+
+  const payload = mergePayload(toPayloadRecord(options.payload), directPayload);
+  const headers = options.headers ? { ...options.headers } : undefined;
+  const userInfo = toPayloadRecord(options.userInfo);
+  const metadata = toPayloadRecord(options.metadata);
+  const otherDetails = toPayloadRecord(options.otherDetails);
+
+  return {
+    headers,
+    payload: withRouteContext(
+      mergePayload(payload, {
+        ...(userInfo ? { userInfo } : {}),
+        ...(metadata ? { metadata } : {}),
+        ...(otherDetails ? { otherDetails } : {}),
+      }),
+    ),
+  };
+};
+
 const NativeExceptionHandler: ExceptionTrackingPluginPlugin = {
-  configure: async (options) => NativeExceptionHandlerNative.configure(await withDevicePayload(options)),
+  configure: async (options) =>
+    NativeExceptionHandlerNative.configure(
+      await withDevicePayload({
+        ...options,
+        headers: {
+          ...(options.headers ?? {}),
+          ...runtimeHeaders,
+        },
+        basePayload: mergePayload(toPayloadRecord(options.basePayload), runtimePayload),
+      }),
+    ),
+  setContext: async (options) => {
+    const context = normalizeContextOptions(options);
+    runtimePayload = mergePayload(runtimePayload, context.payload);
+    runtimeHeaders = {
+      ...runtimeHeaders,
+      ...(context.headers ?? {}),
+    };
+
+    return NativeExceptionHandlerNative.setContext({
+      headers: context.headers,
+      payload: context.payload,
+    });
+  },
   releaseExceptionHold: (options) => NativeExceptionHandlerNative.releaseExceptionHold(options),
   uploadPendingException: () => NativeExceptionHandlerNative.uploadPendingException(),
   crashForTesting: (options) => NativeExceptionHandlerNative.crashForTesting(options),

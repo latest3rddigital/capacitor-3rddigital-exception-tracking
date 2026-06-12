@@ -73,6 +73,7 @@ private func reportException(_ exception: NSException) {
     private var projectKey: String?
     private var headers: [String: Any] = [:]
     private var basePayload: [String: Any] = [:]
+    private var contextPayload: [String: Any] = [:]
     private var releaseHold = true
     private var lastReportedException: NSException?
     private var handlersInstalled = false
@@ -112,6 +113,18 @@ private func reportException(_ exception: NSException) {
 
         installNativeExceptionHandler()
         uploadPendingExceptionAsync()
+    }
+
+    func setContext(_ call: CAPPluginCall) {
+        if let incomingHeaders = call.getObject("headers") {
+            headers = mergeDictionaries(headers, incomingHeaders)
+        }
+
+        if let incomingPayload = call.getObject("payload") {
+            contextPayload = mergeDictionaries(contextPayload, incomingPayload)
+        }
+
+        persistConfiguration()
     }
 
     func releaseExceptionHold(handled: Bool) {
@@ -277,7 +290,7 @@ private func reportException(_ exception: NSException) {
     }
 
     private func buildPayload(exception: NSException) -> [String: Any] {
-        var payload = basePayload
+        var payload = mergeDictionaries(basePayload, contextPayload)
         var metadata = payload["metadata"] as? [String: Any] ?? [:]
         let timestamp = isoTimestamp()
         let deviceId = currentDeviceIdentifier()
@@ -351,7 +364,7 @@ private func reportException(_ exception: NSException) {
             deviceInfo: deviceInfo
         )
 
-        return payload
+        return mergeDictionaries(payload, contextPayload)
     }
 
     private func ensureRouteContext(_ payload: inout [String: Any]) {
@@ -514,6 +527,7 @@ private func reportException(_ exception: NSException) {
         defaults.set(projectKey, forKey: "\(prefsPrefix).projectKey")
         defaults.set(headers, forKey: "\(prefsPrefix).headers")
         defaults.set(basePayload, forKey: "\(prefsPrefix).basePayload")
+        defaults.set(contextPayload, forKey: "\(prefsPrefix).contextPayload")
         defaults.set(enabled, forKey: "\(prefsPrefix).enabled")
         defaults.set(nativeFallbackEnabled, forKey: "\(prefsPrefix).nativeFallbackEnabled")
         defaults.set(executeOriginalHandler, forKey: "\(prefsPrefix).executeOriginalHandler")
@@ -529,6 +543,7 @@ private func reportException(_ exception: NSException) {
         projectKey = defaults.string(forKey: "\(prefsPrefix).projectKey") ?? projectKey
         headers = defaults.dictionary(forKey: "\(prefsPrefix).headers") ?? headers
         basePayload = defaults.dictionary(forKey: "\(prefsPrefix).basePayload") ?? basePayload
+        contextPayload = defaults.dictionary(forKey: "\(prefsPrefix).contextPayload") ?? contextPayload
         if defaults.object(forKey: "\(prefsPrefix).enabled") != nil {
             enabled = defaults.bool(forKey: "\(prefsPrefix).enabled")
         }
@@ -680,6 +695,19 @@ private func reportException(_ exception: NSException) {
             }
         }
         return ""
+    }
+
+    private func mergeDictionaries(_ base: [String: Any], _ overrides: [String: Any]) -> [String: Any] {
+        var merged = base
+        overrides.forEach { key, value in
+            if let baseValue = merged[key] as? [String: Any],
+               let overrideValue = value as? [String: Any] {
+                merged[key] = mergeDictionaries(baseValue, overrideValue)
+            } else {
+                merged[key] = value
+            }
+        }
+        return merged
     }
 
     #if canImport(UIKit)

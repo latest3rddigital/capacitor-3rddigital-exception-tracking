@@ -11,6 +11,7 @@ public class ExceptionTrackingPluginPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "NativeExceptionHandler"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setContext", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "releaseExceptionHold", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "uploadPendingException", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "crashForTesting", returnType: CAPPluginReturnPromise)
@@ -23,6 +24,11 @@ public class ExceptionTrackingPluginPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func configure(_ call: CAPPluginCall) {
         implementation.configure(call)
+        call.resolve()
+    }
+
+    @objc func setContext(_ call: CAPPluginCall) {
+        implementation.setContext(call)
         call.resolve()
     }
 

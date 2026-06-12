@@ -52,6 +52,7 @@ public class ExceptionTrackingPlugin {
     private static String projectKey;
     private static String headersJson = "{}";
     private static String basePayloadJson = "{}";
+    private static String contextPayloadJson = "{}";
     private static Context appContext;
     private static CountDownLatch currentCrashLatch;
     private static Integer lastReportedThrowableId;
@@ -101,6 +102,22 @@ public class ExceptionTrackingPlugin {
 
         installNativeExceptionHandler();
         uploadPendingExceptionAsync(appContext);
+    }
+
+    public void setContext(Context context, JSObject options) throws JSONException {
+        attach(context, pluginReference.get());
+
+        JSONObject headers = options.optJSONObject("headers");
+        if (headers != null) {
+            headersJson = mergeJsonObjects(parseJsonObject(headersJson), headers).toString();
+        }
+
+        JSONObject payload = options.optJSONObject("payload");
+        if (payload != null) {
+            contextPayloadJson = mergeJsonObjects(parseJsonObject(contextPayloadJson), payload).toString();
+        }
+
+        persistConfiguration(appContext);
     }
 
     public void releaseExceptionHold(boolean handled) {
@@ -246,7 +263,8 @@ public class ExceptionTrackingPlugin {
     }
 
     private static JSONObject buildPayload(Throwable throwable) {
-        JSONObject payload = parseJsonObject(basePayloadJson);
+        JSONObject contextPayload = parseJsonObject(contextPayloadJson);
+        JSONObject payload = mergeJsonObjects(parseJsonObject(basePayloadJson), contextPayload);
         JSONObject metadata = payload.optJSONObject("metadata");
         if (metadata == null) {
             metadata = new JSONObject();
@@ -335,7 +353,7 @@ public class ExceptionTrackingPlugin {
             mergeOtherDetails(payload.optJSONObject("otherDetails"), appInfo, memoryInfo, storageInfo, deviceInfo)
         );
 
-        return payload;
+        return mergeJsonObjects(payload, contextPayload);
     }
 
     private static void ensureRouteContext(JSONObject payload) {
@@ -614,6 +632,7 @@ public class ExceptionTrackingPlugin {
             .putString("projectKey", projectKey)
             .putString("headersJson", headersJson)
             .putString("basePayloadJson", basePayloadJson)
+            .putString("contextPayloadJson", contextPayloadJson)
             .putBoolean("enabled", enabled)
             .putBoolean("nativeFallbackEnabled", nativeFallbackEnabled)
             .putBoolean("executeOriginalHandler", executeOriginalHandler)
@@ -632,6 +651,9 @@ public class ExceptionTrackingPlugin {
         projectKey = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("projectKey", projectKey);
         headersJson = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("headersJson", headersJson);
         basePayloadJson = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("basePayloadJson", basePayloadJson);
+        contextPayloadJson = context
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString("contextPayloadJson", contextPayloadJson);
         enabled = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean("enabled", enabled);
         nativeFallbackEnabled = context
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -683,6 +705,27 @@ public class ExceptionTrackingPlugin {
         } catch (Exception exception) {
             return new JSONObject();
         }
+    }
+
+    private static JSONObject mergeJsonObjects(JSONObject base, JSONObject overrides) {
+        JSONObject merged = parseJsonObject(base == null ? "{}" : base.toString());
+        if (overrides == null) {
+            return merged;
+        }
+
+        Iterator<String> keys = overrides.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object overrideValue = overrides.opt(key);
+            Object baseValue = merged.opt(key);
+
+            if (baseValue instanceof JSONObject && overrideValue instanceof JSONObject) {
+                put(merged, key, mergeJsonObjects((JSONObject) baseValue, (JSONObject) overrideValue));
+            } else {
+                put(merged, key, overrideValue);
+            }
+        }
+        return merged;
     }
 
     private static void put(JSONObject object, String key, Object value) {

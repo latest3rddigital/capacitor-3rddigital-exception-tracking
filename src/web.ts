@@ -1,9 +1,17 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { ConfigureNativeExceptionHandlerOptions, ExceptionTrackingPluginPlugin } from './definitions';
+import type {
+  ConfigureNativeExceptionHandlerOptions,
+  ExceptionTrackingPluginPlugin,
+  UpdateNativeExceptionContextOptions,
+} from './definitions';
 
 export class ExceptionTrackingPluginWeb extends WebPlugin implements ExceptionTrackingPluginPlugin {
   async configure(_options: ConfigureNativeExceptionHandlerOptions): Promise<void> {
+    return undefined;
+  }
+
+  async setContext(_options: UpdateNativeExceptionContextOptions): Promise<void> {
     return undefined;
   }
 

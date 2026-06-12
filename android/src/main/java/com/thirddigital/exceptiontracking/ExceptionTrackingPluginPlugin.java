@@ -27,6 +27,16 @@ public class ExceptionTrackingPluginPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setContext(PluginCall call) {
+        try {
+            implementation.setContext(getContext(), call.getData());
+            call.resolve();
+        } catch (Exception exception) {
+            call.reject("Failed to update native exception context", exception);
+        }
+    }
+
+    @PluginMethod
     public void releaseExceptionHold(PluginCall call) {
         boolean handled = call.getBoolean("handled", true);
         implementation.releaseExceptionHold(handled);

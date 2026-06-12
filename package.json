@@ -1,6 +1,6 @@
 {
   "name": "capacitor-3rddigital-exception-tracking",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Native exception tracking bridge for Capacitor apps",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
